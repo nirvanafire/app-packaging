@@ -187,9 +187,46 @@ jobs:
           name: linux-build
           path: PyQt6Demo-Linux-x64.tar.gz
 
+  # ==================== Windows ARM Build ====================
+  build-windows-arm:
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" src/main.py
+
+      - name: Create distribution package
+        run: |
+          mkdir dist/package
+          cp dist/PyQt6Demo.exe dist/package/
+          cp README.md dist/package/ 2>$null
+          cp LICENSE dist/package/ 2>$null
+          cd dist/package
+          7z a -tzip ../../PyQt6Demo-Windows-ARM64.zip *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm-build
+          path: PyQt6Demo-Windows-ARM64.zip
+
   # ==================== Create Release ====================
   create-release:
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-windows-arm, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -223,13 +260,15 @@ jobs:
             
             | 平台 | 文件 | 说明 |
             |------|------|------|
-            | Windows | `PyQt6Demo-Windows-x64.zip` | 64位 Windows 系统 |
-            | macOS | `PyQt6Demo-macOS.dmg` | Apple Silicon (M1/M2/M3) 芯片 Mac |
+            | Windows (x64) | `PyQt6Demo-Windows-x64.zip` | Intel/AMD 64位处理器 |
+            | Windows (ARM64) | `PyQt6Demo-Windows-ARM64.zip` | ARM64 处理器 (如骁龙 X Elite) |
+            | macOS | `PyQt6Demo-macOS.dmg` | Apple Silicon (M1/M2/M3/M4) 芯片 |
             | Linux | `PyQt6Demo-Linux-x64.tar.gz` | 64位 Linux 系统 |
             
             ### 系统要求
             
-            - **Windows**: Windows 10/11 64位
+            - **Windows x64**: Windows 10/11 64位 (Intel/AMD)
+            - **Windows ARM64**: Windows 11 on ARM (骁龙 X Elite/X Plus 等)
             - **macOS**: macOS 11.0+ (Apple Silicon)
             - **Linux**: 现代Linux发行版，需要X11或Wayland
             
@@ -244,6 +283,7 @@ jobs:
           prerelease: false
           files: |
             artifacts/windows-build/PyQt6Demo-Windows-x64.zip
+            artifacts/windows-arm-build/PyQt6Demo-Windows-ARM64.zip
             artifacts/macos-build/PyQt6Demo-macOS.dmg
             artifacts/linux-build/PyQt6Demo-Linux-x64.tar.gz
         env:
