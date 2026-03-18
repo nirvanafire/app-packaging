@@ -34,11 +34,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build with PyInstaller
-        run: |
-          pyinstaller --noconfirm --onefile --windowed \
-            --name "PyQt6Demo" \
-            --add-data "src;src" \
-            src/main.py
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" src/main.py
 
       - name: Create distribution package
         run: |
