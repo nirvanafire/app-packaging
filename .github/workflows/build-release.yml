@@ -1,9 +1,6 @@
 name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -15,7 +12,7 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  # ==================== Windows Build ====================
+  # ==================== Windows x64 Build ====================
   build-windows:
     runs-on: windows-latest
     steps:
@@ -34,18 +31,15 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build with PyInstaller
-        run: |
-          pyinstaller --noconfirm --onefile --windowed \
-            --name "PyQt6Demo" \
-            --add-data "src;src" \
-            src/main.py
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" src/main.py
 
       - name: Create distribution package
         run: |
           mkdir dist/package
           cp dist/PyQt6Demo.exe dist/package/
-          cp README.md dist/package/ 2>/dev/null || true
-          cp LICENSE dist/package/ 2>/dev/null || true
+          cp README.md dist/package/ 2>$null
+          cp LICENSE dist/package/ 2>$null
           cd dist/package
           7z a -tzip ../../PyQt6Demo-Windows-x64.zip *
 
@@ -55,9 +49,9 @@ jobs:
           name: windows-build
           path: PyQt6Demo-Windows-x64.zip
 
-  # ==================== macOS Intel Build ====================
-  build-macos-intel:
-    runs-on: macos-13  # Intel runner
+  # ==================== Windows ARM Build ====================
+  build-windows-arm:
+    runs-on: windows-11-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,70 +68,27 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build with PyInstaller
-        run: |
-          pyinstaller --noconfirm --onefile --windowed \
-            --name "PyQt6Demo" \
-            --add-data "src:src" \
-            src/main.py
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" src/main.py
 
-      - name: Create .app bundle structure
+      - name: Create distribution package
         run: |
-          mkdir -p dist/PyQt6Demo.app/Contents/MacOS
-          mkdir -p dist/PyQt6Demo.app/Contents/Resources
-          cp dist/PyQt6Demo dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
-          chmod +x dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
-          
-          # Create Info.plist
-          cat > dist/PyQt6Demo.app/Contents/Info.plist << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleName</key>
-              <string>PyQt6Demo</string>
-              <key>CFBundleDisplayName</key>
-              <string>PyQt6 Demo</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.example.pyqt6demo</string>
-              <key>CFBundleVersion</key>
-              <string>1.0.0</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0.0</string>
-              <key>CFBundleExecutable</key>
-              <string>PyQt6Demo</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>10.13</string>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Create DMG
-        run: |
-          brew install create-dmg
-          create-dmg \
-            --volname "PyQt6Demo" \
-            --volicon "dist/PyQt6Demo.app/Contents/Resources/applet.icns" 2>/dev/null || true \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "PyQt6Demo.app" 150 190 \
-            --hide-extension "PyQt6Demo.app" \
-            --app-drop-link 450 190 \
-            "PyQt6Demo-macOS-Intel.dmg" \
-            "dist/PyQt6Demo.app" || \
-          hdiutil create -volname "PyQt6Demo" -srcfolder dist/PyQt6Demo.app -ov -format UDZO PyQt6Demo-macOS-Intel.dmg
+          mkdir dist/package
+          cp dist/PyQt6Demo.exe dist/package/
+          cp README.md dist/package/ 2>$null
+          cp LICENSE dist/package/ 2>$null
+          cd dist/package
+          7z a -tzip ../../PyQt6Demo-Windows-ARM64.zip *
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-intel-build
-          path: PyQt6Demo-macOS-Intel.dmg
+          name: windows-arm-build
+          path: PyQt6Demo-Windows-ARM64.zip
 
   # ==================== macOS Apple Silicon Build ====================
-  build-macos-arm:
-    runs-on: macos-14  # Apple Silicon (M1) runner
+  build-macos:
+    runs-on: macos-14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -167,7 +118,6 @@ jobs:
           cp dist/PyQt6Demo dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
           chmod +x dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
           
-          # Create Info.plist
           cat > dist/PyQt6Demo.app/Contents/Info.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -188,10 +138,15 @@ jobs:
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>LSMinimumSystemVersion</key>
-              <string>10.13</string>
+              <string>11.0</string>
           </dict>
           </plist>
           EOF
+
+      - name: Fix permissions for distribution
+        run: |
+          xattr -cr dist/PyQt6Demo.app
+          chmod -R 755 dist/PyQt6Demo.app
 
       - name: Create DMG
         run: |
@@ -204,15 +159,19 @@ jobs:
             --icon "PyQt6Demo.app" 150 190 \
             --hide-extension "PyQt6Demo.app" \
             --app-drop-link 450 190 \
-            "PyQt6Demo-macOS-ARM.dmg" \
+            "PyQt6Demo-macOS.dmg" \
             "dist/PyQt6Demo.app" || \
-          hdiutil create -volname "PyQt6Demo" -srcfolder dist/PyQt6Demo.app -ov -format UDZO PyQt6Demo-macOS-ARM.dmg
+          hdiutil create -volname "PyQt6Demo" -srcfolder dist/PyQt6Demo.app -ov -format UDZO PyQt6Demo-macOS.dmg
+
+      - name: Fix DMG permissions
+        run: |
+          xattr -cr PyQt6Demo-macOS.dmg
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-arm-build
-          path: PyQt6Demo-macOS-ARM.dmg
+          name: macos-build
+          path: PyQt6Demo-macOS.dmg
 
   # ==================== Linux Build ====================
   build-linux:
@@ -262,7 +221,7 @@ jobs:
 
   # ==================== Create Release ====================
   create-release:
-    needs: [build-windows, build-macos-intel, build-macos-arm, build-linux]
+    needs: [build-windows, build-windows-arm, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -278,11 +237,7 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -296,26 +251,30 @@ jobs:
             
             | 平台 | 文件 | 说明 |
             |------|------|------|
-            | Windows | `PyQt6Demo-Windows-x64.zip` | 64位Windows系统 |
-            | macOS (Intel) | `PyQt6Demo-macOS-Intel.dmg` | Intel芯片Mac |
-            | macOS (Apple Silicon) | `PyQt6Demo-macOS-ARM.dmg` | M1/M2/M3芯片Mac |
-            | Linux | `PyQt6Demo-Linux-x64.tar.gz` | 64位Linux系统 |
+            | Windows (x64) | `PyQt6Demo-Windows-x64.zip` | Intel/AMD 64位处理器 |
+            | Windows (ARM64) | `PyQt6Demo-Windows-ARM64.zip` | ARM64 处理器 |
+            | macOS | `PyQt6Demo-macOS.dmg` | Apple Silicon (M1/M2/M3/M4) |
+            | Linux | `PyQt6Demo-Linux-x64.tar.gz` | 64位 Linux |
             
             ### 系统要求
             
-            - **Windows**: Windows 10/11 64位
-            - **macOS**: macOS 10.13+ (支持Intel和Apple Silicon)
-            - **Linux**: 现代Linux发行版，需要X11或Wayland
+            - **Windows x64**: Windows 10/11 64位
+            - **Windows ARM64**: Windows 11 on ARM
+            - **macOS**: macOS 11.0+ (Apple Silicon)
+            - **Linux**: 现代 Linux 发行版
             
-            ### macOS 用户注意
+            ### macOS 首次运行说明
             
-            首次运行可能需要在"系统偏好设置 > 安全性与隐私"中允许运行。
+            如果提示"已损坏"，在终端运行：
+            ```bash
+            xattr -cr /Applications/PyQt6Demo.app
+            ```
           draft: false
           prerelease: false
           files: |
             artifacts/windows-build/PyQt6Demo-Windows-x64.zip
-            artifacts/macos-intel-build/PyQt6Demo-macOS-Intel.dmg
-            artifacts/macos-arm-build/PyQt6Demo-macOS-ARM.dmg
+            artifacts/windows-arm-build/PyQt6Demo-Windows-ARM64.zip
+            artifacts/macos-build/PyQt6Demo-macOS.dmg
             artifacts/linux-build/PyQt6Demo-Linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
