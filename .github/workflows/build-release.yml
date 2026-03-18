@@ -109,6 +109,13 @@ jobs:
           </plist>
           EOF
 
+      - name: Fix permissions for distribution
+        run: |
+          # 移除 quarantine 属性（允许分发）
+          xattr -cr dist/PyQt6Demo.app
+          # 设置正确的权限
+          chmod -R 755 dist/PyQt6Demo.app
+
       - name: Create DMG
         run: |
           brew install create-dmg || true
@@ -123,6 +130,10 @@ jobs:
             "PyQt6Demo-macOS.dmg" \
             "dist/PyQt6Demo.app" || \
           hdiutil create -volname "PyQt6Demo" -srcfolder dist/PyQt6Demo.app -ov -format UDZO PyQt6Demo-macOS.dmg
+
+      - name: Fix DMG permissions
+        run: |
+          xattr -cr PyQt6Demo-macOS.dmg
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -222,9 +233,13 @@ jobs:
             - **macOS**: macOS 11.0+ (Apple Silicon)
             - **Linux**: 现代Linux发行版，需要X11或Wayland
             
-            ### macOS 用户注意
+            ### macOS 首次运行说明
             
-            首次运行可能需要在"系统偏好设置 > 安全性与隐私"中允许运行。
+            如果提示"已损坏"或"无法打开"，请在终端运行以下命令：
+            ```bash
+            xattr -cr /Applications/PyQt6Demo.app
+            ```
+            然后再次打开应用即可。
           draft: false
           prerelease: false
           files: |
