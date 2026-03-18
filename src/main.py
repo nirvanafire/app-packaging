@@ -5,13 +5,26 @@ A simple cross-platform GUI application with web browser
 """
 
 import sys
+import os
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, 
     QLabel, QPushButton, QLineEdit, QHBoxLayout, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QUrl, QSize
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+
+
+def resource_path(relative_path):
+    """获取资源文件的绝对路径，兼容开发环境和打包后环境"""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller 打包后的临时目录
+        base_path = sys._MEIPASS
+    else:
+        # 开发环境
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    return os.path.join(base_path, relative_path)
 
 
 class MainWindow(QMainWindow):
@@ -25,6 +38,11 @@ class MainWindow(QMainWindow):
         # 更大的默认窗口尺寸
         self.resize(1400, 900)
         self.setMinimumSize(800, 600)
+        
+        # 设置窗口图标
+        icon_path = resource_path("icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Central widget
         central_widget = QWidget()
@@ -140,6 +158,11 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("PyQt6 WebBrowser")
     app.setOrganizationName("Demo")
+    
+    # 设置应用图标
+    icon_path = resource_path("icon.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     
     window = MainWindow()
     window.show()
