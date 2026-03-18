@@ -33,9 +33,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Convert icon to ICO format
+        run: |
+          python -c "
+          from PIL import Image
+          import os
+          if os.path.exists('icon.png'):
+              img = Image.open('icon.png')
+              sizes = [(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)]
+              img.save('icon.ico', format='ICO', sizes=sizes)
+              print('Created icon.ico')
+          "
+
       - name: Build with PyInstaller
         run: >
-          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" --add-data "icon.png;icon.png" src/main.py
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --icon icon.ico --add-data "src;src" --add-data "icon.png;icon.png" src/main.py
 
       - name: Create distribution package
         run: |
@@ -70,9 +82,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Convert icon to ICO format
+        run: |
+          python -c "
+          from PIL import Image
+          import os
+          if os.path.exists('icon.png'):
+              img = Image.open('icon.png')
+              sizes = [(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)]
+              img.save('icon.ico', format='ICO', sizes=sizes)
+              print('Created icon.ico')
+          "
+
       - name: Build with PyInstaller
         run: >
-          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --add-data "src;src" --add-data "icon.png;icon.png" src/main.py
+          pyinstaller --noconfirm --onefile --windowed --name PyQt6Demo --icon icon.ico --add-data "src;src" --add-data "icon.png;icon.png" src/main.py
 
       - name: Create distribution package
         run: |
@@ -107,10 +131,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Convert icon to ICNS format
+        run: |
+          python -c "
+          from PIL import Image
+          import os
+          if os.path.exists('icon.png'):
+              img = Image.open('icon.png')
+              # Create iconset directory
+              os.makedirs('icon.iconset', exist_ok=True)
+              sizes = [16, 32, 128, 256, 512]
+              for s in sizes:
+                  resized = img.resize((s, s), Image.Resampling.LANCZOS)
+                  resized.save(f'icon.iconset/icon_{s}x{s}.png')
+                  if s <= 256:
+                      resized2x = img.resize((s*2, s*2), Image.Resampling.LANCZOS)
+                      resized2x.save(f'icon.iconset/icon_{s}x{s}@2x.png')
+              print('Created icon.iconset')
+          "
+          # Convert to icns using macOS tool
+          iconutil -c icns icon.iconset -o icon.icns || echo "icon.icns creation failed, using fallback"
+
       - name: Build with PyInstaller
         run: |
           pyinstaller --noconfirm --onefile --windowed \
             --name "PyQt6Demo" \
+            --icon "icon.icns" \
             --add-data "src:src" \
             --add-data "icon.png:icon.png" \
             src/main.py
@@ -121,6 +167,8 @@ jobs:
           mkdir -p dist/PyQt6Demo.app/Contents/Resources
           cp dist/PyQt6Demo dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
           chmod +x dist/PyQt6Demo.app/Contents/MacOS/PyQt6Demo
+          # Copy icon to Resources
+          cp icon.icns dist/PyQt6Demo.app/Contents/Resources/icon.icns 2>/dev/null || true
           
           cat > dist/PyQt6Demo.app/Contents/Info.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -141,6 +189,8 @@ jobs:
               <string>PyQt6Demo</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
+              <key>CFBundleIconFile</key>
+              <string>icon.icns</string>
               <key>LSMinimumSystemVersion</key>
               <string>11.0</string>
           </dict>
@@ -242,7 +292,11 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -250,7 +304,7 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## PyQt6 Demo Application Release
+            ## PyQt6 Demo Application ${{ steps.get_version.outputs.VERSION }}
             
             ### 下载说明
             
@@ -267,6 +321,11 @@ jobs:
             - **Windows ARM64**: Windows 11 on ARM
             - **macOS**: macOS 11.0+ (Apple Silicon)
             - **Linux**: 现代 Linux 发行版
+            
+            ### 更新内容
+            
+            - 添加应用图标支持
+            - 优化 UI 布局
             
             ### macOS 首次运行说明
             
