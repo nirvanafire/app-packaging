@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
         
         # URL 输入框（更宽）
         self.url_input = QLineEdit()
-        self.url_input.setText("https://www.baidu.com")
+        self.url_input.setText("http://127.0.0.1:5000")
         self.url_input.setPlaceholderText("输入网址...")
         self.url_input.setFont(QFont("Arial", 11))
         self.url_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         
         # Web Engine View（占据主要空间）
         self.web_view = QWebEngineView()
-        self.web_view.setUrl(QUrl("https://www.baidu.com"))
+        self.web_view.setUrl(QUrl("http://127.0.0.1:5000"))
         
         # 设置浏览器组件的尺寸策略，使其可以伸展
         self.web_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -134,8 +134,8 @@ class MainWindow(QMainWindow):
     
     def go_home(self):
         """Go to home page"""
-        self.web_view.setUrl(QUrl("https://www.baidu.com"))
-        self.url_input.setText("https://www.baidu.com")
+        self.web_view.setUrl(QUrl("http://127.0.0.1:5000"))
+        self.url_input.setText("http://127.0.0.1:5000")
     
     def update_url_bar(self, q):
         """Update URL bar when URL changes"""
