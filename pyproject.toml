@@ -26,6 +26,8 @@ classifiers = [
 dependencies = [
     "PyQt6>=6.5.0",
     "Flask>=3.0.0",
+    "Flask-Login>=0.6.3",
+    "Flask-Principal>=0.4.0",
 ]
 
 [project.scripts]

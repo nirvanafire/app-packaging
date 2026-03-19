@@ -7,6 +7,8 @@ Provides REST API and web interface for the application
 from flask import Flask, jsonify, request, render_template_string
 import os
 import sys
+from .auth import init_auth
+
 
 # 获取资源路径
 def resource_path(relative_path):
@@ -20,7 +22,10 @@ def resource_path(relative_path):
 
 # 创建 Flask 应用
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24).hex()
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# 初始化认证模块
+init_auth(app)
 
 # 首页模板
 HOME_TEMPLATE = '''
@@ -78,13 +83,28 @@ HOME_TEMPLATE = '''
             border-radius: 4px;
             font-size: 13px;
         }
+        .login-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
         .footer { margin-top: 30px; color: #999; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 PyQt6 Web App Server</h1>
-        <p class="subtitle">Flask-based web service</p>
+        <p class="subtitle">Flask-based web service with Authentication</p>
         <div class="status">✅ 服务运行中</div>
         <div class="api-list">
             <h3>API 端点</h3>
@@ -92,9 +112,12 @@ HOME_TEMPLATE = '''
             <div class="api-item"><code>GET /api/status</code> - 服务状态</div>
             <div class="api-item"><code>GET /api/info</code> - 应用信息</div>
             <div class="api-item"><code>POST /api/navigate</code> - 导航控制</div>
+            <div class="api-item"><code>GET /auth/login</code> - 登录页面</div>
+            <div class="api-item"><code>GET /auth/dashboard</code> - 用户控制台 🔒</div>
         </div>
+        <a href="/auth/login" class="login-btn">🔐 登录</a>
         <div class="footer">
-            Powered by Flask & PyQt6
+            Powered by Flask & PyQt6 | Flask-Login & Flask-Principal
         </div>
     </div>
 </body>
@@ -150,14 +173,29 @@ def api_navigate():
     })
 
 
+def register_blueprints(app):
+    """注册所有蓝图"""
+    from .routes import register_blueprints as register_api
+    from .auth_routes import auth_bp
+    
+    register_api(app)
+    app.register_blueprint(auth_bp)
+    
+    return app
+
+
 def create_app():
     """应用工厂函数"""
+    register_blueprints(app)
     return app
 
 
 def run_server(host='127.0.0.1', port=5000, debug=False):
     """启动 Flask 服务器"""
+    # 确保蓝图已注册
+    register_blueprints(app)
     print(f"🌐 Flask server starting at http://{host}:{port}")
+    print(f"🔐 Auth module enabled - Login at http://{host}:{port}/auth/login")
     app.run(host=host, port=port, debug=debug)
 
 
