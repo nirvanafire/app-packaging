@@ -25,10 +25,12 @@ classifiers = [
 ]
 dependencies = [
     "PyQt6>=6.5.0",
+    "Flask>=3.0.0",
 ]
 
 [project.scripts]
 pyqt6-demo = "src.main:main"
+web-server = "src.web.app:run_server"
 
 [tool.setuptools.packages.find]
 where = ["."]
