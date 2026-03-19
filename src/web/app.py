@@ -4,7 +4,7 @@ Flask Web Application
 Provides REST API and web interface for the application
 """
 
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, send_from_directory
 import os
 import sys
 from .auth import init_auth
@@ -20,8 +20,12 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+# 静态文件目录
+STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static', 'dist')
+
+
 # 创建 Flask 应用
-app = Flask(__name__)
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # 初始化认证模块
@@ -180,6 +184,27 @@ def register_blueprints(app):
     
     register_api(app)
     app.register_blueprint(auth_bp)
+    
+    # 添加 Vue 路由支持 - 所有非API路由返回 index.html
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def catch_all(path):
+        # API 路由直接返回
+        if path.startswith(('api/', 'auth/')):
+            return jsonify({'error': 'Not found'}), 404
+        
+        # 检查静态文件是否存在
+        static_file = os.path.join(STATIC_DIR, path)
+        if path and os.path.exists(static_file) and os.path.isfile(static_file):
+            return send_from_directory(STATIC_DIR, path)
+        
+        # 返回 Vue 应用的 index.html (支持前端路由)
+        index_file = os.path.join(STATIC_DIR, 'index.html')
+        if os.path.exists(index_file):
+            return send_from_directory(STATIC_DIR, 'index.html')
+        
+        # 如果没有构建文件，显示默认首页
+        return render_template_string(HOME_TEMPLATE)
     
     return app
 
