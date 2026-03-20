@@ -1,0 +1,186 @@
+name: Docker Build and Deploy
+
+on:
+  push:
+    branches:
+      - feature/web
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'docker.io' }}
+  IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME || 'nirvanafire/pyqt6-web-app' }}
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  # ==================== Build and Push Docker Image ====================
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+
+      - name: Output image info
+        run: |
+          echo "Image pushed: ${{ steps.meta.outputs.tags }}"
+          echo "Digest: ${{ steps.build.outputs.digest }}"
+
+  # ==================== Deploy to Remote Server ====================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Remote Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            
+            # Configuration
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(echo ${{ github.ref_name }} | sed 's/\//-/g')"
+            CONTAINER_NAME="pyqt6-web"
+            PORT="${{ secrets.DEPLOY_PORT_APP || 5000 }}"
+            
+            echo "🚀 Deploying $IMAGE to production..."
+            
+            # Login to Docker registry
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+            
+            # Pull the latest image
+            docker pull $IMAGE
+            
+            # Stop and remove existing container
+            docker stop $CONTAINER_NAME 2>/dev/null || true
+            docker rm $CONTAINER_NAME 2>/dev/null || true
+            
+            # Run new container
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart unless-stopped \
+              -p $PORT:5000 \
+              -e SECRET_KEY="${{ secrets.SECRET_KEY }}" \
+              $IMAGE
+            
+            # Health check
+            echo "⏳ Waiting for container to start..."
+            sleep 10
+            
+            if docker ps | grep -q $CONTAINER_NAME; then
+              echo "✅ Container is running!"
+              docker logs --tail 20 $CONTAINER_NAME
+            else
+              echo "❌ Container failed to start!"
+              docker logs $CONTAINER_NAME
+              exit 1
+            fi
+            
+            # Clean up old images
+            docker image prune -af --filter "until=24h"
+            
+            echo "🎉 Deployment completed successfully!"
+
+  # ==================== Optional: Deploy with Docker Compose ====================
+  deploy-compose:
+    needs: build
+    runs-on: ubuntu-latest
+    if: false  # Set to true to enable Docker Compose deployment
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            
+            cd /opt/pyqt6-web || mkdir -p /opt/pyqt6-web && cd /opt/pyqt6-web
+            
+            # Login to Docker registry
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+            
+            # Create .env file
+            cat > .env << EOF
+            DOCKER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            PORT=5000
+            EOF
+            
+            # Pull and restart with docker-compose
+            docker compose pull
+            docker compose up -d --remove-orphans
+            
+            # Health check
+            sleep 10
+            docker compose ps
+            docker compose logs --tail 20
+            
+            # Clean up
+            docker image prune -af --filter "until=24h"
